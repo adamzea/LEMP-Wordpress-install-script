@@ -1,0 +1,105 @@
+#!/bin/bash
+ 
+# Update apt-get package list and install necessary packages
+sudo apt-get update
+sudo apt install lsb-release apt-transport-https ca-certificates software-properties-common curl
+sudo wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
+sudo sh -c 'echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list'
+sudo apt update
+sudo apt-get install -y nginx mariadb-server php8.2-fpm php8.2-mysql php8.2-curl php8.2-gd php8.2-intl php8.2-mbstring php8.2-soap php8.2-xml php8.2-xmlrpc php8.2-zip
+ 
+# Configure PHP to allow 100Mb file size uploads
+sudo sed -i 's/upload_max_filesize = 2M/upload_max_filesize = 100M/' /etc/php/8.2/fpm/php.ini
+sudo sed -i 's/post_max_size = 8M/post_max_size = 100M/' /etc/php/8.2/fpm/php.ini
+ 
+# Enable PHP 8.2 FPM in NGINX
+sudo sed -i 's/# fastcgi_pass unix:\/var\/run\/php\/php8.2-fpm.sock;/fastcgi_pass unix:\/var\/run\/php\/php8.2-fpm.sock;/' /etc/nginx/sites-available/default
+ 
+# Restart NGINX and PHP-FPM
+sudo systemctl restart nginx
+sudo systemctl restart php8.2-fpm
+ 
+# Request domain name and create NGINX server block
+echo "Please enter your domain name:"
+read domain_name
+ 
+sudo mkdir -p /var/www/$domain_name/html
+sudo chown -R $USER:$USER /var/www/$domain_name/html
+sudo chmod -R 755 /var/www/$domain_name
+ 
+sudo tee /etc/nginx/sites-available/$domain_name <<EOF
+server {
+    listen 80;
+    listen [::]:80;
+ 
+    root /var/www/$domain_name/html;
+    index index.html index.htm index.php;
+ 
+    server_name $domain_name www.$domain_name;
+ 
+    location / {
+        try_files \$uri \$uri/ /index.php?\$args;
+    }
+ 
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
+    }
+ 
+    location ~ /\.ht {
+        deny all;
+    }
+}
+EOF
+ 
+sudo ln -s /etc/nginx/sites-available/$domain_name /etc/nginx/sites-enabled/
+sudo systemctl restart nginx
+ 
+# Create MariaDB database and user
+echo "Please enter your MariaDB root password:"
+read db_root_password
+ 
+echo "Please enter your desired WordPress database name:"
+read db_name
+ 
+echo "Please enter your desired WordPress database user:"
+read db_user
+ 
+echo "Please enter your desired WordPress database user password:"
+read db_user_password
+ 
+sudo mysql -uroot -p$db_root_password <<EOF
+CREATE DATABASE $db_name;
+CREATE USER '$db_user'@'localhost' IDENTIFIED BY '$db_user_password';
+GRANT ALL PRIVILEGES ON $db_name.* TO '$db_user'@'localhost';
+FLUSH PRIVILEGES;
+EOF
+ 
+# Install the latest version of Wordpress
+cd /tmp
+curl -LO https://wordpress.org/latest.tar.gz
+tar xzvf latest.tar.gz
+sudo cp -a /tmp/wordpress/. /var/www/$domain_name/html
+sudo chown -R www-data:www-data /var/www/$domain_name/html
+sudo find /var/www/$domain_name/html -type d -exec chmod 750 {} \;
+sudo find /var/www/$domain_name/html -type f -exec chmod 640 {} \;
+ 
+# Configure Wordpress with MariaDB
+sudo mv /var/www/$domain_name/html/wp-config-sample.php /var/www/$domain_name/html/wp-config.php
+sudo sed -i "s/database_name_here/$db_name/" /var/www/$domain_name/html/wp-config.php
+sudo sed -i "s/username_here/$db_user/" /var/www/$domain_name/html/wp-config.php
+sudo sed -i "s/password_here/$db_user_password/" /var/www/$domain_name/html/wp-config.php
+sudo sed -i "s/localhost/localhost:3306/" /var/www/$domain_name/html/wp-config.php
+ 
+echo "WordPress has been installed and configured successfully!"
+ 
+# Install Certbot to get SSL certificates and enable HTTPS
+sudo apt-get update
+sudo apt-get install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d $domain_name -d www.$domain_name
+ 
+echo "SSL certificate obtained and HTTPS enabled successfully!"
+ 
+exit 0
+
+
