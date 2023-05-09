@@ -84,6 +84,8 @@ curl -LO https://wordpress.org/latest.tar.gz
 tar xzvf latest.tar.gz
 sudo cp -a /tmp/wordpress/. /var/www/$domain_name/html
 sudo chown -R www-data:www-data /var/www/$domain_name/html
+# or make editable via sftp:
+# sudo chown -R ubuntu:www-data /var/www/$domain_name/html
 sudo find /var/www/$domain_name/html -type d -exec chmod 750 {} \;
 sudo find /var/www/$domain_name/html -type f -exec chmod 640 {} \;
  
