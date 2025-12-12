@@ -39,7 +39,7 @@ sudo mkdir -p /var/www/$domain_name/html
 sudo chown -R $USER:$USER /var/www/$domain_name/html
 sudo chmod -R 755 /var/www/$domain_name
 
-# Create optimized NGINX configuration for WordPress 6.9
+# Create optimized NGINX configuration for WordPress
 sudo tee /etc/nginx/sites-available/$domain_name <<EOF
 server {
     listen 80;
@@ -124,10 +124,10 @@ GRANT ALL PRIVILEGES ON $db_name.* TO '$db_user'@'localhost';
 FLUSH PRIVILEGES;
 EOF
 
-# Install the latest version of WordPress 6.9
+# Install the latest version of WordPress
 cd /tmp
-curl -LO https://wordpress.org/wordpress-6.9.tar.gz
-tar xzvf wordpress-6.9.tar.gz
+curl -LO https://wordpress.org/latest.tar.gz
+tar xzvf latest.tar.gz
 sudo cp -a /tmp/wordpress/. /var/www/$domain_name/html
 sudo chown -R www-data:www-data /var/www/$domain_name/html
 sudo find /var/www/$domain_name/html -type d -exec chmod 755 {} \;
