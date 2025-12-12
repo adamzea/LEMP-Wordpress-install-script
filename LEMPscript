@@ -1,110 +1,194 @@
 #!/bin/bash
- 
+
 # Update apt-get package list and install necessary packages
 sudo apt-get update
-sudo apt install lsb-release apt-transport-https ca-certificates software-properties-common curl
-# sudo wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
-# sudo sh -c 'echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list'
+sudo apt install -y lsb-release apt-transport-https ca-certificates software-properties-common curl gnupg
 
-sudo apt install software-properties-common -y && sudo add-apt-repository ppa:ondrej/php -y
-
+# Add Sury PHP repository for PHP 8.4
+# Import the repository key
+curl -sSL https://packages.sury.org/php/README.txt | sudo bash -E
 sudo apt update
-sudo apt-get install -y nginx mariadb-server php8.2-fpm php8.2-mysql php8.2-curl php8.2-gd php8.2-intl php8.2-mbstring php8.2-soap php8.2-xml php8.2-xmlrpc php8.2-zip
- 
+
+# Install PHP 8.4 and required extensions for WordPress 6.9
+sudo apt-get install -y nginx mariadb-server php8.4-fpm php8.4-mysql php8.4-curl php8.4-gd php8.4-intl php8.4-mbstring php8.4-soap php8.4-xml php8.4-xmlrpc php8.4-zip php8.4-bcmath php8.4-imagick php8.4-opcache
+
 # Configure PHP to allow 100Mb file size uploads
-sudo sed -i 's/upload_max_filesize = 2M/upload_max_filesize = 100M/' /etc/php/8.2/fpm/php.ini
-sudo sed -i 's/post_max_size = 8M/post_max_size = 100M/' /etc/php/8.2/fpm/php.ini
- 
-# Enable PHP 8.2 FPM in NGINX
-sudo sed -i 's/# fastcgi_pass unix:\/var\/run\/php\/php8.2-fpm.sock;/fastcgi_pass unix:\/var\/run\/php\/php8.2-fpm.sock;/' /etc/nginx/sites-available/default
- 
+sudo sed -i 's/upload_max_filesize = 2M/upload_max_filesize = 100M/' /etc/php/8.4/fpm/php.ini
+sudo sed -i 's/post_max_size = 8M/post_max_size = 100M/' /etc/php/8.4/fpm/php.ini
+# Set memory limit to 256M for WordPress
+sudo sed -i 's/memory_limit = 128M/memory_limit = 256M/' /etc/php/8.4/fpm/php.ini
+# Enable OPcache for better performance
+sudo sed -i 's/;opcache.enable=1/opcache.enable=1/' /etc/php/8.4/fpm/php.ini
+sudo sed -i 's/;opcache.memory_consumption=128/opcache.memory_consumption=256/' /etc/php/8.4/fpm/php.ini
+
+# Configure PHP-FPM pool settings for better performance
+sudo sed -i 's/;pm.max_children = 5/pm.max_children = 50/' /etc/php/8.4/fpm/pool.d/www.conf
+sudo sed -i 's/;pm.start_servers = 2/pm.start_servers = 10/' /etc/php/8.4/fpm/pool.d/www.conf
+sudo sed -i 's/;pm.min_spare_servers = 1/pm.min_spare_servers = 5/' /etc/php/8.4/fpm/pool.d/www.conf
+sudo sed -i 's/;pm.max_spare_servers = 3/pm.max_spare_servers = 15/' /etc/php/8.4/fpm/pool.d/www.conf
+
 # Restart NGINX and PHP-FPM
 sudo systemctl restart nginx
-sudo systemctl restart php8.2-fpm
- 
+sudo systemctl restart php8.4-fpm
+
 # Request domain name and create NGINX server block
 echo "Please enter your domain name:"
 read domain_name
- 
+
 sudo mkdir -p /var/www/$domain_name/html
 sudo chown -R $USER:$USER /var/www/$domain_name/html
 sudo chmod -R 755 /var/www/$domain_name
- 
+
+# Create optimized NGINX configuration for WordPress 6.9
 sudo tee /etc/nginx/sites-available/$domain_name <<EOF
 server {
     listen 80;
     listen [::]:80;
- 
-    root /var/www/$domain_name/html;
-    index index.html index.htm index.php;
- 
+    
     server_name $domain_name www.$domain_name;
- 
+    root /var/www/$domain_name/html;
+    index index.php index.html index.htm;
+    
+    # WordPress security headers
+    add_header X-Content-Type-Options nosniff;
+    add_header X-XSS-Protection "1; mode=block";
+    add_header Referrer-Policy "strict-origin-when-cross-origin";
+    
+    # WordPress permalinks
     location / {
         try_files \$uri \$uri/ /index.php?\$args;
     }
- 
+    
+    # PHP processing
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
+        fastcgi_pass unix:/var/run/php/php8.4-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+        include fastcgi_params;
+        fastcgi_read_timeout 300;
+        
+        # Prevent PHP from exposing its version
+        fastcgi_hide_header X-Powered-By;
     }
- 
-    location ~ /\.ht {
+    
+    # Deny access to sensitive files
+    location ~ /\.(ht|git|svn) {
         deny all;
+    }
+    
+    # Block access to wp-config.php
+    location = /wp-config.php {
+        deny all;
+    }
+    
+    # Block access to debug logs
+    location ~* \.(log|txt|md|json)$ {
+        deny all;
+    }
+    
+    # Cache static files
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|webp|woff2)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        access_log off;
     }
 }
 EOF
- 
+
 sudo ln -s /etc/nginx/sites-available/$domain_name /etc/nginx/sites-enabled/
-sudo systemctl restart nginx
- 
-# Create MariaDB database and user
-echo "Please enter your MariaDB root password:"
+sudo nginx -t && sudo systemctl restart nginx
+
+# Secure MariaDB installation
+echo "Please set your MariaDB root password:"
 read db_root_password
- 
+
+# Create MariaDB database and user
 echo "Please enter your desired WordPress database name:"
 read db_name
- 
+
 echo "Please enter your desired WordPress database user:"
 read db_user
- 
+
 echo "Please enter your desired WordPress database user password:"
 read db_user_password
- 
-sudo mysql -uroot -p$db_root_password <<EOF
-CREATE DATABASE $db_name;
+
+sudo mysql -uroot <<EOF
+SET PASSWORD FOR 'root'@'localhost' = PASSWORD('$db_root_password');
+DELETE FROM mysql.user WHERE User='';
+DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
+DROP DATABASE IF EXISTS test;
+DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+CREATE DATABASE $db_name CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER '$db_user'@'localhost' IDENTIFIED BY '$db_user_password';
 GRANT ALL PRIVILEGES ON $db_name.* TO '$db_user'@'localhost';
 FLUSH PRIVILEGES;
 EOF
- 
-# Install the latest version of Wordpress
+
+# Install the latest version of WordPress 6.9
 cd /tmp
-curl -LO https://wordpress.org/latest.tar.gz
-tar xzvf latest.tar.gz
+curl -LO https://wordpress.org/wordpress-6.9.tar.gz
+tar xzvf wordpress-6.9.tar.gz
 sudo cp -a /tmp/wordpress/. /var/www/$domain_name/html
 sudo chown -R www-data:www-data /var/www/$domain_name/html
-# or make editable via sftp:
-# sudo chown -R ubuntu:www-data /var/www/$domain_name/html
-sudo find /var/www/$domain_name/html -type d -exec chmod 750 {} \;
-sudo find /var/www/$domain_name/html -type f -exec chmod 640 {} \;
- 
-# Configure Wordpress with MariaDB
+sudo find /var/www/$domain_name/html -type d -exec chmod 755 {} \;
+sudo find /var/www/$domain_name/html -type f -exec chmod 644 {} \;
+sudo chmod 660 /var/www/$domain_name/html/wp-config.php
+
+# Generate secure WordPress salts
+salts=$(curl -s https://api.wordpress.org/secret-key/1.1/salt/)
+# Configure WordPress with MariaDB
 sudo mv /var/www/$domain_name/html/wp-config-sample.php /var/www/$domain_name/html/wp-config.php
 sudo sed -i "s/database_name_here/$db_name/" /var/www/$domain_name/html/wp-config.php
 sudo sed -i "s/username_here/$db_user/" /var/www/$domain_name/html/wp-config.php
 sudo sed -i "s/password_here/$db_user_password/" /var/www/$domain_name/html/wp-config.php
-sudo sed -i "s/localhost/localhost:3306/" /var/www/$domain_name/html/wp-config.php
- 
-echo "WordPress has been installed and configured successfully!"
- 
+
+# Add WordPress salts to config
+for salt in "${salts[@]}"; do
+    sudo sed -i "/AUTH_KEY/d" /var/www/$domain_name/html/wp-config.php
+    sudo sed -i "/SECURE_AUTH_KEY/d" /var/www/$domain_name/html/wp-config.php
+    sudo sed -i "/LOGGED_IN_KEY/d" /var/www/$domain_name/html/wp-config.php
+    sudo sed -i "/NONCE_KEY/d" /var/www/$domain_name/html/wp-config.php
+    sudo sed -i "/AUTH_SALT/d" /var/www/$domain_name/html/wp-config.php
+    sudo sed -i "/SECURE_AUTH_SALT/d" /var/www/$domain_name/html/wp-config.php
+    sudo sed -i "/LOGGED_IN_SALT/d" /var/www/$domain_name/html/wp-config.php
+    sudo sed -i "/NONCE_SALT/d" /var/www/$domain_name/html/wp-config.php
+done
+sudo sed -i "/@stop inserting salt here@/i $salts" /var/www/$domain_name/html/wp-config.php
+
+# Add additional WordPress optimizations for PHP 8.4
+sudo tee -a /var/www/$domain_name/html/wp-config.php <<EOF
+
+// Optimize WordPress for PHP 8.4
+define('WP_MEMORY_LIMIT', '256M');
+define('WP_MAX_MEMORY_LIMIT', '512M');
+
+// Enable WordPress object cache
+define('WP_CACHE', true);
+
+// Disable unnecessary features
+define('DISALLOW_FILE_EDIT', true);
+define('AUTOMATIC_UPDATER_DISABLED', false);
+
+// Database optimizations
+define('WP_POST_REVISIONS', 5);
+define('EMPTY_TRASH_DAYS', 7);
+
+// Set default theme
+define('WP_DEFAULT_THEME', 'twentytwentyfour');
+EOF
+
 # Install Certbot to get SSL certificates and enable HTTPS
 sudo apt-get update
 sudo apt-get install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d $domain_name -d www.$domain_name
- 
-echo "SSL certificate obtained and HTTPS enabled successfully!"
- 
+sudo certbot --nginx --non-interactive --agree-tos -m admin@$domain_name -d $domain_name -d www.$domain_name
+
+# Final restart of services
+sudo systemctl restart nginx
+sudo systemctl restart php8.4-fpm
+sudo systemctl restart mariadb
+
+echo "WordPress 6.9 has been successfully installed with PHP 8.4!"
+echo "Your site is available at https://$domain_name"
+echo "Admin URL: https://$domain_name/wp-admin"
+
 exit 0
-
-
