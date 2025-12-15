@@ -175,7 +175,16 @@ define('EMPTY_TRASH_DAYS', 7);
 
 // Set default theme
 define('WP_DEFAULT_THEME', 'twentytwentyfour');
+
+// Disable wp-cron to use system cron instead
+define('DISABLE_WP_CRON', true);
 EOF
+
+# Install cron if not already installed
+sudo apt-get install -y cron
+# Add a cron job to run the WordPress cron jobs every 15 minutes
+(crontab -l 2>/dev/null; echo "*/15 * * * * wget -q -O - https://$domain_name/wp-cron.php?doing_wp_cron >/dev/null 2>&1") | crontab -
+
 
 # Install Certbot to get SSL certificates and enable HTTPS
 sudo apt-get update
