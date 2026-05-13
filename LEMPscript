@@ -10,7 +10,7 @@ curl -sSL https://packages.sury.org/php/README.txt | sudo bash -E
 sudo apt update
 
 # Install PHP 8.4 and required extensions for WordPress 6.9
-sudo apt-get install -y nginx mariadb-server php8.4-fpm php8.4-mysql php8.4-curl php8.4-gd php8.4-intl php8.4-mbstring php8.4-soap php8.4-xml php8.4-xmlrpc php8.4-zip php8.4-bcmath php8.4-imagick php8.4-opcache
+sudo apt-get install -y nginx mariadb-server php8.5-fpm php8.5-mysql php8.5-curl php8.5-gd php8.5-intl php8.5-mbstring php8.5-soap php8.5-xml php8.5-xmlrpc php8.5-zip php8.5-bcmath php8.5-imagick php8.5-opcache
 
 # Configure PHP to allow 100Mb file size uploads
 sudo sed -i 's/upload_max_filesize = 2M/upload_max_filesize = 100M/' /etc/php/8.4/fpm/php.ini
@@ -29,7 +29,7 @@ sudo sed -i 's/;pm.max_spare_servers = 3/pm.max_spare_servers = 15/' /etc/php/8.
 
 # Restart NGINX and PHP-FPM
 sudo systemctl restart nginx
-sudo systemctl restart php8.4-fpm
+sudo systemctl restart php8.5-fpm
 
 # Request domain name and create NGINX server block
 echo "Please enter your domain name:"
@@ -62,7 +62,7 @@ server {
     # PHP processing
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/var/run/php/php8.4-fpm.sock;
+        fastcgi_pass unix:/var/run/php/php8.5-fpm.sock;
         fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
         include fastcgi_params;
         fastcgi_read_timeout 300;
@@ -155,10 +155,10 @@ for salt in "${salts[@]}"; do
 done
 sudo sed -i "/@stop inserting salt here@/i $salts" /var/www/$domain_name/html/wp-config.php
 
-# Add additional WordPress optimizations for PHP 8.4
+# Add additional WordPress optimizations for PHP 8.5
 sudo tee -a /var/www/$domain_name/html/wp-config.php <<EOF
 
-// Optimize WordPress for PHP 8.4
+// Optimize WordPress for PHP 8.5
 define('WP_MEMORY_LIMIT', '256M');
 define('WP_MAX_MEMORY_LIMIT', '512M');
 
@@ -193,10 +193,10 @@ sudo certbot --nginx --non-interactive --agree-tos -m admin@$domain_name -d $dom
 
 # Final restart of services
 sudo systemctl restart nginx
-sudo systemctl restart php8.4-fpm
+sudo systemctl restart php8.5-fpm
 sudo systemctl restart mariadb
 
-echo "WordPress 6.9 has been successfully installed with PHP 8.4!"
+echo "WordPress has been successfully installed with PHP 8.5!"
 echo "Your site is available at https://$domain_name"
 echo "Admin URL: https://$domain_name/wp-admin"
 
