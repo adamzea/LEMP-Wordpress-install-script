@@ -102,6 +102,9 @@ sudo ln -s /etc/nginx/sites-available/$domain_name /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl restart nginx
 
 # Secure MariaDB installation
+sudo systemctl start mariadb
+sudo systemctl enable mariadb
+sudo systemctl status mariadb
 echo "Please set your MariaDB root password:"
 read db_root_password
 
