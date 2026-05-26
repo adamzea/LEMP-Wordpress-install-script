@@ -3,14 +3,17 @@
 # Update apt-get package list and install necessary packages
 sudo apt-get update
 sudo apt install -y lsb-release apt-transport-https ca-certificates software-properties-common curl gnupg
+sudo apt remove iptables
 
-# Add Sury PHP repository for PHP 8.4
+# Add PHP repository for PHP 8.5
 # Import the repository key
-curl -sSL https://packages.sury.org/php/README.txt | sudo bash -E
+#curl -sSL https://packages.sury.org/php/README.txt | sudo bash -E
+#sudo apt update
+sudo LC_ALL=C.UTF-8 add-apt-repository ppa:ondrej/php
 sudo apt update
 
 # Install PHP 8.4 and required extensions for WordPress 6.9
-sudo apt-get install -y nginx mariadb-server php8.5-fpm php8.5-mysql php8.5-curl php8.5-gd php8.5-intl php8.5-mbstring php8.5-soap php8.5-xml php8.5-xmlrpc php8.5-zip php8.5-bcmath php8.5-imagick php8.5-opcache
+sudo apt-get install -y nginx mariadb-server mariadb-client php8.5-fpm php8.5-mysql php8.5-curl php8.5-gd php8.5-intl php8.5-mbstring php8.5-soap php8.5-xml php8.5-xmlrpc php8.5-zip php8.5-bcmath php8.5-imagick
 
 # Configure PHP to allow 100Mb file size uploads
 sudo sed -i 's/upload_max_filesize = 2M/upload_max_filesize = 100M/' /etc/php/8.4/fpm/php.ini
