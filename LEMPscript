@@ -205,5 +205,6 @@ sudo systemctl restart mariadb
 echo "WordPress has been successfully installed with PHP 8.5!"
 echo "Your site is available at https://$domain_name"
 echo "Admin URL: https://$domain_name/wp-admin"
+echo "Remember to reboot the server after for the uninstall of IPtables to work on Oracle Cloud"
 
 exit 0
